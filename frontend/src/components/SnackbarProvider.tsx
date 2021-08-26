@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { IconButton, makeStyles, Theme } from '@material-ui/core';
 import { SnackbarProvider as NosnackbarProvider, SnackbarProviderProps } from 'notistack';
 import CloseIcon from '@material-ui/icons/Close';

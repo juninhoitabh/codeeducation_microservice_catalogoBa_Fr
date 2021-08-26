@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { Chip, createMuiTheme, MuiThemeProvider } from '@material-ui/core';
 import theme from '../theme';
 

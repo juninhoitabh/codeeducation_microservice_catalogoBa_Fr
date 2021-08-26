@@ -1,15 +1,10 @@
-import {Page} from "../components/Page";
+import * as React from 'react';
+import { Page } from '../components/Page';
 
-interface DashboardProps {
-
-};
+interface DashboardProps {}
 
 const Dashboard = (props: DashboardProps) => {
-    return (
-        <Page title="Dashboard">
-
-        </Page>
-    );
+	return <Page title='Dashboard'></Page>;
 };
 
 export default Dashboard;

@@ -1,23 +1,47 @@
-import MUIDataTable, { MUIDataTableColumn } from 'mui-datatables';
-import { useEffect, useState } from 'react';
-import { httpVideo } from '../../util/http';
+import * as React from 'react';
+import { useEffect, useRef, useState } from 'react';
 import format from 'date-fns/format';
 import parseISO from 'date-fns/parseISO';
+import { CastMember, CastMemberTypeMap, ListResponse } from '../../util/models';
+import DefaultTable, { makeActionStyles, MuiDataTableRefComponent, TableColumn } from '../../components/Table';
+import { useSnackbar } from 'notistack';
+import { IconButton, MuiThemeProvider } from '@material-ui/core';
+import EditIcon from '@material-ui/icons/Edit';
+import { Link } from 'react-router-dom';
+import useFilter from '../../hooks/useFilter';
+import * as yup from '../../util/vendor/yup';
+import { FilterResetButton } from '../../components/Table/FilterResetButton';
+import castMemberHttp from '../../util/http/castMemberHttp';
+import { invert } from 'lodash';
 
-const CastMemberTypeMap = {
-	1: 'Diretor',
-	2: 'Ator',
-};
+const castMemberNames = Object.values(CastMemberTypeMap);
 
-const columnsDefinition: MUIDataTableColumn[] = [
+const columnsDefinition: TableColumn[] = [
+	{
+		name: 'id',
+		label: 'ID',
+		width: '30%',
+		options: {
+			sort: false,
+			filter: false,
+		},
+	},
 	{
 		name: 'name',
 		label: 'Nome',
+		width: '43%',
+		options: {
+			filter: false,
+		},
 	},
 	{
 		name: 'type',
 		label: 'Tipo',
+		width: '4%',
 		options: {
+			filterOptions: {
+				names: castMemberNames,
+			},
 			customBodyRender: (value, tableMeta, updateValue) => {
 				//typescript any
 				return CastMemberTypeMap[value];
@@ -27,6 +51,7 @@ const columnsDefinition: MUIDataTableColumn[] = [
 	{
 		name: 'created_at',
 		label: 'Criado em',
+		width: '10%',
 		options: {
 			filter: false,
 			customBodyRender(value, tableMeta, updateValue) {
@@ -34,17 +59,158 @@ const columnsDefinition: MUIDataTableColumn[] = [
 			},
 		},
 	},
+	{
+		name: 'actions',
+		label: 'Ações',
+		width: '13%',
+		options: {
+			filter: false,
+			sort: false,
+			customBodyRender: (value, tableMeta) => {
+				return (
+					<span>
+						<IconButton color={'secondary'} component={Link} to={`/cast-members/${tableMeta.rowData[0]}/edit`}>
+							<EditIcon />
+						</IconButton>
+					</span>
+				);
+			},
+		},
+	},
 ];
+const debounceTime = 300;
+const debouncedSearchTime = 300;
+const rowsPerPage = 15;
+const rowsPerPageOptions = [15, 25, 50];
 
-type Props = {};
-const Table = (props: Props) => {
-	const [data, setData] = useState([]);
+const Table = () => {
+	const snackbar = useSnackbar();
+	const subscribed = useRef(true);
+	const [data, setData] = useState<CastMember[]>([]);
+	const [loading, setLoading] = useState<boolean>(false);
+	const tableRef = useRef() as React.MutableRefObject<MuiDataTableRefComponent>;
+	const { columns, filterManager, filterState, debouncedFilterState, totalRecords, setTotalRecords } = useFilter({
+		columns: columnsDefinition,
+		debounceTime: debounceTime,
+		rowsPerPage,
+		rowsPerPageOptions,
+		tableRef,
+		extraFilter: {
+			createValidationSchema: () => {
+				return yup.object().shape({
+					type: yup
+						.string()
+						.nullable()
+						.transform((value) => {
+							return !value || !castMemberNames.includes(value) ? undefined : value;
+						})
+						.default(null),
+				});
+			},
+			formatSearchParams: (debouncedState) => {
+				return debouncedState.extraFilter
+					? {
+							...(debouncedState.extraFilter.type && {
+								type: debouncedState.extraFilter.type,
+							}),
+					  }
+					: undefined;
+			},
+			getStateFromURL: (queryParams) => {
+				return {
+					type: queryParams.get('type'),
+				};
+			},
+		},
+	});
+
+	const indexColumnType = columns.findIndex((c) => c.name === 'type');
+	const columnType = columns[indexColumnType];
+	const typeFilterValue = filterState.extraFilter && (filterState.extraFilter.type as never);
+	(columnType.options as any).filterList = typeFilterValue ? [typeFilterValue] : [];
+
+	const serverSideFilterList = columns.map((column) => []);
+	if (typeFilterValue) {
+		serverSideFilterList[indexColumnType] = [typeFilterValue];
+	}
 
 	useEffect(() => {
-		httpVideo.get('cast_members').then((response) => setData(response.data.data));
-	}, []);
+		subscribed.current = true;
+		filterManager.pushHistory();
+		getData();
+		return () => {
+			subscribed.current = false;
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [filterManager.cleanSearchText(debouncedFilterState.search), debouncedFilterState.pagination.page, debouncedFilterState.pagination.per_page, debouncedFilterState.order, JSON.stringify(debouncedFilterState.extraFilter)]);
 
-	return <MUIDataTable title='Listagem de membros de elenco' columns={columnsDefinition} data={data} />;
+	async function getData() {
+		setLoading(true);
+		try {
+			const { data } = await castMemberHttp.list<ListResponse<CastMember>>({
+				queryParams: {
+					search: filterManager.cleanSearchText(debouncedFilterState.search),
+					page: debouncedFilterState.pagination.page,
+					per_page: debouncedFilterState.pagination.per_page,
+					sort: debouncedFilterState.order.sort,
+					dir: debouncedFilterState.order.dir,
+					...(debouncedFilterState.extraFilter && debouncedFilterState.extraFilter.type && { type: invert(CastMemberTypeMap)[debouncedFilterState.extraFilter.type] }),
+				},
+			});
+			if (subscribed.current) {
+				setData(data.data);
+				setTotalRecords(data.meta.total);
+			}
+		} catch (error) {
+			console.error(error);
+			if (castMemberHttp.isCancelledRequest(error)) {
+				return;
+			}
+			snackbar.enqueueSnackbar('Não foi possível carregar as informações', { variant: 'error' });
+		} finally {
+			setLoading(false);
+		}
+	}
+
+	return (
+		<MuiThemeProvider theme={makeActionStyles(columnsDefinition.length - 1)}>
+			<DefaultTable
+				title=''
+				columns={columns}
+				data={data}
+				loading={loading}
+				debouncedSearchTime={debouncedSearchTime}
+				ref={tableRef}
+				options={{
+					serverSideFilterList,
+					serverSide: true,
+					responsive: 'scrollMaxHeight',
+					searchText: filterState.search as any,
+					page: filterState.pagination.page - 1,
+					rowsPerPage: filterState.pagination.per_page,
+					rowsPerPageOptions,
+					count: totalRecords,
+					onFilterChange: (column, filterList, type) => {
+						const columnIndex = columns.findIndex((c) => c.name === column);
+						filterManager.changeExtraFilter({
+							[column]: filterList[columnIndex].length ? filterList[columnIndex][0] : null,
+						});
+					},
+					customToolbar: () => (
+						<FilterResetButton
+							handleClick={() => {
+								filterManager.resetFilter();
+							}}
+						/>
+					),
+					onSearchChange: (value) => filterManager.changeSearch(value),
+					onChangePage: (page) => filterManager.changePage(page),
+					onChangeRowsPerPage: (perPage) => filterManager.changeRowsPerPage(perPage),
+					onColumnSortChange: (changedColumn: string, direction: string) => filterManager.changeColumnSort(changedColumn, direction),
+				}}
+			/>
+		</MuiThemeProvider>
+	);
 };
 
 export default Table;
