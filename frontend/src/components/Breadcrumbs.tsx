@@ -6,7 +6,7 @@ import { Route } from 'react-router';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Container, createStyles, makeStyles, Theme } from '@material-ui/core';
 import { Location } from 'history';
-import routes from '../pages/routes';
+import routes from '../routes';
 import RouteParser from 'route-parser';
 
 const breadcrumbNameMap: { [key: string]: string } = {};

@@ -56,7 +56,7 @@ const columnsDefinition: TableColumn[] = [
 				names: [],
 			},
 			customBodyRender: (value, tableMeta, updateValue) => {
-				return 'teste'; //.map(value => value.name).join(', ');
+				return value.map((v) => v.name).join(', ');
 			},
 		},
 	},
@@ -100,6 +100,7 @@ const Table = () => {
 	const subscribed = useRef(true);
 	const [data, setData] = useState<Genre[]>([]);
 	const [loading, setLoading] = useState<boolean>(false);
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	const [categories, setCategories] = useState<Category[]>();
 	const tableRef = useRef() as React.MutableRefObject<MuiDataTableRefComponent>;
 

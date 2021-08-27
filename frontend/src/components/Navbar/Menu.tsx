@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { IconButton, Menu as MuiMenu, MenuItem } from '@material-ui/core';
 import MenuIcon from '@material-ui/icons/Menu';
-import routes, { MyRouteProps } from '../../pages/routes';
+import routes, { MyRouteProps } from '../../routes';
 import { Link } from 'react-router-dom';
 
 const listRoutes = {
@@ -9,8 +9,7 @@ const listRoutes = {
 	'categories.list': 'Categorias',
 	'cast_members.list': 'Membros de elenco',
 	'genres.list': 'Gêneros',
-	/* "videos.list": "Vídeos",
-  uploads: "Uploads", */
+	'videos.list': 'Vídeos',
 };
 
 const menuRoutes = routes.filter((route) => Object.keys(listRoutes).includes(route.name));

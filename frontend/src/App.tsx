@@ -5,7 +5,7 @@ import './App.css';
 import Breadcrumbs from './components/Breadcrumbs';
 import { Navbar } from './components/Navbar';
 import { SnackbarProvider } from './components/SnackbarProvider';
-import AppRouter from './pages/routes/AppRouter';
+import AppRouter from './routes/AppRouter';
 import theme from './theme';
 
 const App: React.FC = () => {

@@ -72,7 +72,6 @@ const theme = createMuiTheme({
 				},
 			},
 		},
-
 		MUIDataTableSelectCell: {
 			headerCell: {
 				backgroundColor: (palette!.primary as SimplePaletteColorOptions).main,
