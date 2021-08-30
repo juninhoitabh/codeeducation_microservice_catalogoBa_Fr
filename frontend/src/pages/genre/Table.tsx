@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import format from 'date-fns/format';
 import parseISO from 'date-fns/parseISO';
 import { BadgeNo, BadgeYes } from '../../components/Badge';
@@ -14,6 +14,7 @@ import categoryHttp from '../../util/http/categoryHttp';
 import useFilter from '../../hooks/useFilter';
 import genreHttp from '../../util/http/genreHttp';
 import { FilterResetButton } from '../../components/Table/FilterResetButton';
+import LoadingContext from '../../components/loading/LoadingContext';
 
 const columnsDefinition: TableColumn[] = [
 	{
@@ -99,18 +100,12 @@ const Table = () => {
 	const snackbar = useSnackbar();
 	const subscribed = useRef(true);
 	const [data, setData] = useState<Genre[]>([]);
-	const [loading, setLoading] = useState<boolean>(false);
+	const loading = useContext(LoadingContext);
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	const [categories, setCategories] = useState<Category[]>();
 	const tableRef = useRef() as React.MutableRefObject<MuiDataTableRefComponent>;
-
-	const { columns, filterManager, filterState, debouncedFilterState, totalRecords, setTotalRecords } = useFilter({
-		columns: columnsDefinition,
-		debounceTime: debounceTime,
-		rowsPerPage,
-		rowsPerPageOptions,
-		tableRef,
-		extraFilter: {
+	const extraFilter = useMemo(
+		() => ({
 			createValidationSchema: () => {
 				return yup.object().shape({
 					categories: yup
@@ -134,7 +129,17 @@ const Table = () => {
 					categories: queryParams.get('categories'),
 				};
 			},
-		},
+		}),
+		[],
+	);
+
+	const { columns, filterManager, cleanSearchText, filterState, debouncedFilterState, totalRecords, setTotalRecords } = useFilter({
+		columns: columnsDefinition,
+		debounceTime: debounceTime,
+		rowsPerPage,
+		rowsPerPageOptions,
+		tableRef,
+		extraFilter,
 	});
 
 	const indexColumnCategories = columns.findIndex((c) => c.name === 'categories');
@@ -149,7 +154,6 @@ const Table = () => {
 	useEffect(() => {
 		let isSubscribed = true;
 		(async () => {
-			setLoading(true);
 			try {
 				const { data } = await categoryHttp.list({ queryParams: { all: '' } });
 				if (isSubscribed) {
@@ -159,8 +163,6 @@ const Table = () => {
 			} catch (error) {
 				console.error(error);
 				snackbar.enqueueSnackbar('Não foi possível carregar as informações', { variant: 'error' });
-			} finally {
-				setLoading(false);
 			}
 		})();
 
@@ -172,20 +174,18 @@ const Table = () => {
 
 	useEffect(() => {
 		subscribed.current = true;
-		filterManager.pushHistory();
 		getData();
 		return () => {
 			subscribed.current = false;
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [filterManager.cleanSearchText(debouncedFilterState.search), debouncedFilterState.pagination.page, debouncedFilterState.pagination.per_page, debouncedFilterState.order, JSON.stringify(debouncedFilterState.extraFilter)]);
+	}, [cleanSearchText(debouncedFilterState.search), debouncedFilterState.pagination.page, debouncedFilterState.pagination.per_page, debouncedFilterState.order, JSON.stringify(debouncedFilterState.extraFilter)]);
 
 	async function getData() {
-		setLoading(true);
 		try {
 			const { data } = await genreHttp.list<ListResponse<Genre>>({
 				queryParams: {
-					search: filterManager.cleanSearchText(debouncedFilterState.search),
+					search: cleanSearchText(debouncedFilterState.search),
 					page: debouncedFilterState.pagination.page,
 					per_page: debouncedFilterState.pagination.per_page,
 					sort: debouncedFilterState.order.sort,
@@ -203,8 +203,6 @@ const Table = () => {
 				return;
 			}
 			snackbar.enqueueSnackbar('Não foi possível carregar as informações', { variant: 'error' });
-		} finally {
-			setLoading(false);
 		}
 	}
 

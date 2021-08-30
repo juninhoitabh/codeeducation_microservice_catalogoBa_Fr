@@ -1,5 +1,4 @@
-import * as React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import format from 'date-fns/format';
 import parseISO from 'date-fns/parseISO';
 import { CastMember, CastMemberTypeMap, ListResponse } from '../../util/models';
@@ -13,6 +12,7 @@ import * as yup from '../../util/vendor/yup';
 import { FilterResetButton } from '../../components/Table/FilterResetButton';
 import castMemberHttp from '../../util/http/castMemberHttp';
 import { invert } from 'lodash';
+import LoadingContext from '../../components/loading/LoadingContext';
 
 const castMemberNames = Object.values(CastMemberTypeMap);
 
@@ -83,18 +83,13 @@ const rowsPerPage = 15;
 const rowsPerPageOptions = [15, 25, 50];
 
 const Table = () => {
-	const snackbar = useSnackbar();
+	const { enqueueSnackbar } = useSnackbar();
 	const subscribed = useRef(true);
 	const [data, setData] = useState<CastMember[]>([]);
-	const [loading, setLoading] = useState<boolean>(false);
+	const loading = useContext(LoadingContext);
 	const tableRef = useRef() as React.MutableRefObject<MuiDataTableRefComponent>;
-	const { columns, filterManager, filterState, debouncedFilterState, totalRecords, setTotalRecords } = useFilter({
-		columns: columnsDefinition,
-		debounceTime: debounceTime,
-		rowsPerPage,
-		rowsPerPageOptions,
-		tableRef,
-		extraFilter: {
+	const extraFilter = useMemo(
+		() => ({
 			createValidationSchema: () => {
 				return yup.object().shape({
 					type: yup
@@ -120,9 +115,20 @@ const Table = () => {
 					type: queryParams.get('type'),
 				};
 			},
-		},
+		}),
+		[],
+	);
+
+	const { columns, filterManager, cleanSearchText, filterState, debouncedFilterState, totalRecords, setTotalRecords } = useFilter({
+		columns: columnsDefinition,
+		debounceTime: debounceTime,
+		rowsPerPage,
+		rowsPerPageOptions,
+		tableRef,
+		extraFilter,
 	});
 
+	const searchText = cleanSearchText(debouncedFilterState.search);
 	const indexColumnType = columns.findIndex((c) => c.name === 'type');
 	const columnType = columns[indexColumnType];
 	const typeFilterValue = filterState.extraFilter && (filterState.extraFilter.type as never);
@@ -133,43 +139,53 @@ const Table = () => {
 		serverSideFilterList[indexColumnType] = [typeFilterValue];
 	}
 
+	const getData = useCallback(
+		async ({ search, page, per_page, sort, dir, type }) => {
+			try {
+				const { data } = await castMemberHttp.list<ListResponse<CastMember>>({
+					queryParams: {
+						search,
+						page,
+						per_page,
+						sort,
+						dir,
+						...(type && {
+							type: invert(CastMemberTypeMap)[type],
+						}),
+					},
+				});
+				if (subscribed.current) {
+					setData(data.data);
+					setTotalRecords(data.meta.total);
+				}
+			} catch (error) {
+				console.error(error);
+				if (castMemberHttp.isCancelledRequest(error)) {
+					return;
+				}
+				enqueueSnackbar('Não foi possível carregar as informações', { variant: 'error' });
+			}
+		},
+		[enqueueSnackbar, setTotalRecords],
+	);
+
 	useEffect(() => {
 		subscribed.current = true;
-		filterManager.pushHistory();
-		getData();
+		getData({
+			search: searchText,
+			page: debouncedFilterState.pagination.page,
+			per_page: debouncedFilterState.pagination.per_page,
+			sort: debouncedFilterState.order.sort,
+			dir: debouncedFilterState.order.dir,
+			...(debouncedFilterState.extraFilter &&
+				debouncedFilterState.extraFilter.type && {
+					type: debouncedFilterState.extraFilter.type,
+				}),
+		});
 		return () => {
 			subscribed.current = false;
 		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [filterManager.cleanSearchText(debouncedFilterState.search), debouncedFilterState.pagination.page, debouncedFilterState.pagination.per_page, debouncedFilterState.order, JSON.stringify(debouncedFilterState.extraFilter)]);
-
-	async function getData() {
-		setLoading(true);
-		try {
-			const { data } = await castMemberHttp.list<ListResponse<CastMember>>({
-				queryParams: {
-					search: filterManager.cleanSearchText(debouncedFilterState.search),
-					page: debouncedFilterState.pagination.page,
-					per_page: debouncedFilterState.pagination.per_page,
-					sort: debouncedFilterState.order.sort,
-					dir: debouncedFilterState.order.dir,
-					...(debouncedFilterState.extraFilter && debouncedFilterState.extraFilter.type && { type: invert(CastMemberTypeMap)[debouncedFilterState.extraFilter.type] }),
-				},
-			});
-			if (subscribed.current) {
-				setData(data.data);
-				setTotalRecords(data.meta.total);
-			}
-		} catch (error) {
-			console.error(error);
-			if (castMemberHttp.isCancelledRequest(error)) {
-				return;
-			}
-			snackbar.enqueueSnackbar('Não foi possível carregar as informações', { variant: 'error' });
-		} finally {
-			setLoading(false);
-		}
-	}
+	}, [getData, searchText, debouncedFilterState.pagination.page, debouncedFilterState.pagination.per_page, debouncedFilterState.order, debouncedFilterState.extraFilter]);
 
 	return (
 		<MuiThemeProvider theme={makeActionStyles(columnsDefinition.length - 1)}>

@@ -1,13 +1,14 @@
 import * as React from 'react';
 import { TextField, FormControl, FormLabel, RadioGroup, FormControlLabel, Radio, FormHelperText } from '@material-ui/core';
 import { useSnackbar } from 'notistack';
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useHistory, useParams } from 'react-router-dom';
-import SubmitActions from '../../components/SubmitActionsProps';
+import SubmitActions from '../../components/SubmitActions';
 import castMemberHttp from '../../util/http/castMemberHttp';
 import { CastMember } from '../../util/models';
 import * as yup from '../../util/vendor/yup';
+import LoadingContext from '../../components/loading/LoadingContext';
 
 const validationSchema = yup.object().shape({
 	name: yup.string().label('Nome').required().max(255),
@@ -15,11 +16,11 @@ const validationSchema = yup.object().shape({
 });
 
 export const Form = () => {
-	const snackbar = useSnackbar();
+	const { enqueueSnackbar } = useSnackbar();
 	const history = useHistory();
 	const { id } = useParams<{ id }>();
 	const [castMember, setCastMember] = useState<CastMember | null>(null);
-	const [loading, setLoading] = useState<boolean>(false);
+	const loading = useContext(LoadingContext);
 
 	const { register, handleSubmit, getValues, setValue, reset, errors, watch, triggerValidation } = useForm({
 		validationSchema,
@@ -32,7 +33,6 @@ export const Form = () => {
 
 		let isSubscribed = true;
 		(async function getcastMembers() {
-			setLoading(true);
 			try {
 				const { data } = await castMemberHttp.get(id);
 				if (isSubscribed) {
@@ -41,36 +41,30 @@ export const Form = () => {
 				}
 			} catch (error) {
 				console.error(error);
-				snackbar.enqueueSnackbar('Não foi possível carregar as informações', { variant: 'error' });
-			} finally {
-				setLoading(false);
+				enqueueSnackbar('Não foi possível carregar as informações', { variant: 'error' });
 			}
 		})();
 
 		return () => {
 			isSubscribed = false;
 		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
+	}, [id, reset, enqueueSnackbar]);
 
 	useEffect(() => {
 		register({ name: 'type' });
 	}, [register]);
 
 	async function onSubmit(formData, event) {
-		setLoading(true);
 		try {
 			const http = !castMember ? castMemberHttp.create(formData) : castMemberHttp.update(castMember.id, formData);
 			const { data } = await http;
-			snackbar.enqueueSnackbar('Membro de elenco salva com sucesso', { variant: 'success' });
+			enqueueSnackbar('Membro de elenco salva com sucesso', { variant: 'success' });
 			setTimeout(() => {
 				event ? (id ? history.replace(`/cast-members/${data.data.id}/edit`) : history.push(`/cast-members/${data.data.id}/edit`)) : history.push('/cast-members');
 			});
 		} catch (error) {
 			console.error(error);
-			snackbar.enqueueSnackbar('Não foi possivel salvar o Membro de elenco', { variant: 'error' });
-		} finally {
-			setLoading(false);
+			enqueueSnackbar('Não foi possivel salvar o Membro de elenco', { variant: 'error' });
 		}
 	}
 

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { TextField, MenuItem } from '@material-ui/core';
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import * as yup from '../../util/vendor/yup';
 import categoryHttp from '../../util/http/categoryHttp';
@@ -8,7 +8,8 @@ import genreHttp from '../../util/http/genreHttp';
 import { useSnackbar } from 'notistack';
 import { useHistory, useParams } from 'react-router-dom';
 import { Category, Genre } from '../../util/models';
-import SubmitActions from '../../components/SubmitActionsProps';
+import SubmitActions from '../../components/SubmitActions';
+import LoadingContext from '../../components/loading/LoadingContext';
 
 const validationSchema = yup.object().shape({
 	name: yup.string().label('Nome').required().max(255),
@@ -18,10 +19,10 @@ const validationSchema = yup.object().shape({
 export const Form = () => {
 	const [categories, setCategories] = useState<Category[]>([]);
 	const [genre, setGenre] = useState<Genre | null>(null);
-	const snackbar = useSnackbar();
+	const { enqueueSnackbar } = useSnackbar();
 	const history = useHistory();
 	const { id } = useParams<{ id }>();
-	const [loading, setLoading] = useState<boolean>(false);
+	const loading = useContext(LoadingContext);
 
 	const { register, handleSubmit, getValues, setValue, watch, errors, reset, triggerValidation } = useForm<{ name; categories_id }>({
 		validationSchema,
@@ -33,7 +34,6 @@ export const Form = () => {
 	useEffect(() => {
 		let isSubscribed = true;
 		(async () => {
-			setLoading(true);
 			const promises = [categoryHttp.list({ queryParams: { all: '' } })];
 			if (id) {
 				promises.push(genreHttp.get(id));
@@ -50,36 +50,30 @@ export const Form = () => {
 				}
 			} catch (error) {
 				console.error(error);
-				snackbar.enqueueSnackbar('Não foi possível carregar as informações', { variant: 'error' });
-			} finally {
-				setLoading(false);
+				enqueueSnackbar('Não foi possível carregar as informações', { variant: 'error' });
 			}
 		})();
 
 		return () => {
 			isSubscribed = false;
 		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
+	}, [enqueueSnackbar, id, reset]);
 
 	useEffect(() => {
 		register({ name: 'categories_id' });
 	}, [register]);
 
 	async function onSubmit(formData, event) {
-		setLoading(true);
 		try {
 			const http = !genre ? genreHttp.create(formData) : genreHttp.update(genre.id, formData);
 			const { data } = await http;
-			snackbar.enqueueSnackbar('Gênero salvo com sucesso', { variant: 'success' });
+			enqueueSnackbar('Gênero salvo com sucesso', { variant: 'success' });
 			setTimeout(() => {
 				event ? (id ? history.replace(`/genres/${data.data.id}/edit`) : history.push(`/genres/${data.data.id}/edit`)) : history.push('/genres');
 			});
 		} catch (error) {
 			console.error(error);
-			snackbar.enqueueSnackbar('Não foi possivel salvar o gênero', { variant: 'error' });
-		} finally {
-			setLoading(false);
+			enqueueSnackbar('Não foi possivel salvar o gênero', { variant: 'error' });
 		}
 	}
 

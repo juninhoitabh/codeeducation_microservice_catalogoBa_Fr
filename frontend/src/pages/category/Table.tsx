@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import format from 'date-fns/format';
 import parseISO from 'date-fns/parseISO';
 import categoryHttp from '../../util/http/categoryHttp';
@@ -12,6 +12,7 @@ import EditIcon from '@material-ui/icons/Edit';
 import { Link } from 'react-router-dom';
 import { FilterResetButton } from '../../components/Table/FilterResetButton';
 import useFilter from '../../hooks/useFilter';
+import LoadingContext from '../../components/loading/LoadingContext';
 
 const columnsDefinition: TableColumn[] = [
 	{
@@ -82,9 +83,9 @@ const Table = () => {
 	const snackbar = useSnackbar();
 	const subscribed = useRef(true);
 	const [data, setData] = useState<Category[]>([]);
-	const [loading, setLoading] = useState<boolean>(false);
+	const loading = useContext(LoadingContext);
 	const tableRef = useRef() as React.MutableRefObject<MuiDataTableRefComponent>;
-	const { columns, filterManager, filterState, debouncedFilterState, totalRecords, setTotalRecords } = useFilter({
+	const { columns, filterManager, cleanSearchText, filterState, debouncedFilterState, totalRecords, setTotalRecords } = useFilter({
 		columns: columnsDefinition,
 		debounceTime: debounceTime,
 		rowsPerPage,
@@ -94,18 +95,16 @@ const Table = () => {
 
 	useEffect(() => {
 		subscribed.current = true;
-		filterManager.pushHistory();
 		getData();
 		return () => {
 			subscribed.current = false;
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [filterManager.cleanSearchText(debouncedFilterState.search), debouncedFilterState.pagination.page, debouncedFilterState.pagination.per_page, debouncedFilterState.order]);
+	}, [cleanSearchText(debouncedFilterState.search), debouncedFilterState.pagination.page, debouncedFilterState.pagination.per_page, debouncedFilterState.order]);
 
 	async function getData() {
-		setLoading(true);
 		try {
-			const { data } = await categoryHttp.list<ListResponse<Category>>({ queryParams: { search: filterManager.cleanSearchText(debouncedFilterState.search), page: debouncedFilterState.pagination.page, per_page: debouncedFilterState.pagination.per_page, sort: debouncedFilterState.order.sort, dir: debouncedFilterState.order.dir } });
+			const { data } = await categoryHttp.list<ListResponse<Category>>({ queryParams: { search: cleanSearchText(debouncedFilterState.search), page: debouncedFilterState.pagination.page, per_page: debouncedFilterState.pagination.per_page, sort: debouncedFilterState.order.sort, dir: debouncedFilterState.order.dir } });
 			if (subscribed.current) {
 				setData(data.data);
 				setTotalRecords(data.meta.total);
@@ -116,8 +115,6 @@ const Table = () => {
 				return;
 			}
 			snackbar.enqueueSnackbar('Não foi possível carregar as informações', { variant: 'error' });
-		} finally {
-			setLoading(false);
 		}
 	}
 

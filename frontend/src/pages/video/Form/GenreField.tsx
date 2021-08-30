@@ -1,12 +1,16 @@
-import { FormControl, FormControlProps, FormHelperText, Typography } from '@material-ui/core';
-import React, { MutableRefObject, useImperativeHandle, useRef } from 'react';
+// @flow
+import * as React from 'react';
 import AsyncAutocomplete, { AsyncAutocompleteComponent } from '../../../components/AsyncAutocomplete';
-import { GridSelected } from '../../../components/GridSelected';
-import { GridSelectedItem } from '../../../components/GridSelectedItem';
-import useCollectionManager from '../../../hooks/useCollectionManager';
+import GridSelected from '../../../components/GridSelected';
+import GridSelectedItem from '../../../components/GridSelectedItem';
+import { FormControl, FormControlProps, FormHelperText, Typography, useTheme } from '@material-ui/core';
 import useHttpHandled from '../../../hooks/useHttpHandled';
 import genreHttp from '../../../util/http/genreHttp';
+import useCollectionManager from '../../../hooks/useCollectionManager';
 import { getGenresFromCategory } from '../../../util/model-filters';
+import { useImperativeHandle } from 'react';
+import { useRef } from 'react';
+import { MutableRefObject } from 'react';
 
 interface GenreFieldProps {
 	genres: any[];
@@ -23,14 +27,15 @@ export interface GenreFieldComponent {
 }
 
 const GenreField = React.forwardRef<GenreFieldComponent, GenreFieldProps>((props, ref) => {
-	const { genres, setGenres, error, disabled, categories, setCategories } = props;
-	const autoCompleteHttp = useHttpHandled();
+	const { genres, setGenres, categories, setCategories, error, disabled } = props;
+	const autocompleteHttp = useHttpHandled();
 	const { addItem, removeItem } = useCollectionManager(genres, setGenres);
 	const { removeItem: removeCategory } = useCollectionManager(categories, setCategories);
 	const autocompleteRef = useRef() as MutableRefObject<AsyncAutocompleteComponent>;
+	const theme = useTheme();
 
-	const fetchOptions = (searchText) => {
-		return autoCompleteHttp(
+	function fetchOptions(searchText) {
+		return autocompleteHttp(
 			genreHttp.list({
 				queryParams: {
 					search: searchText,
@@ -38,7 +43,7 @@ const GenreField = React.forwardRef<GenreFieldComponent, GenreFieldProps>((props
 				},
 			}),
 		).then((data) => data.data);
-	};
+	}
 
 	useImperativeHandle(ref, () => ({
 		clear: () => autocompleteRef.current.clear(),
@@ -46,7 +51,24 @@ const GenreField = React.forwardRef<GenreFieldComponent, GenreFieldProps>((props
 
 	return (
 		<>
-			<AsyncAutocomplete ref={autocompleteRef} fetchOptions={fetchOptions} AutocompleteProps={{ /* autoSelect: true, */ clearOnEscape: true, freeSolo: true, getOptionSelected: (option, value) => option.id === value.id, getOptionLabel: (option) => option.name, onChange: (event, value) => addItem(value), disabled }} TextFieldProps={{ label: 'Gêneros', error: error !== undefined }} />
+			<AsyncAutocomplete
+				ref={autocompleteRef}
+				fetchOptions={fetchOptions}
+				AutocompleteProps={{
+					//autoSelect: true,
+					clearOnEscape: true,
+					freeSolo: true,
+					getOptionLabel: (option) => option.name,
+					getOptionSelected: (option, value) => option.id === value.id,
+					onChange: (event, value) => addItem(value),
+					disabled,
+				}}
+				TextFieldProps={{
+					label: 'Gêneros',
+					error: error !== undefined,
+				}}
+			/>
+			<FormHelperText style={{ height: theme.spacing(3) }}>Escolha os gêneros do vídeos</FormHelperText>
 			<FormControl margin={'normal'} fullWidth error={error !== undefined} disabled={disabled === true} {...props.FormControlProps}>
 				<GridSelected>
 					{genres.map((genre, key) => (

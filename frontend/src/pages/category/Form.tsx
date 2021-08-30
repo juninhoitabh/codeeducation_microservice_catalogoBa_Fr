@@ -1,25 +1,25 @@
-import * as React from 'react';
 import { Checkbox, TextField, FormControlLabel } from '@material-ui/core';
 import { useForm } from 'react-hook-form';
 import categoryHttp from '../../util/http/categoryHttp';
 import * as yup from '../../util/vendor/yup';
 import { useHistory, useParams } from 'react-router';
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { useSnackbar } from 'notistack';
 import { Category } from '../../util/models';
-import SubmitActions from '../../components/SubmitActionsProps';
+import SubmitActions from '../../components/SubmitActions';
 import { DefaultForm } from '../../components/DefaultForm';
+import LoadingContext from '../../components/loading/LoadingContext';
 
 const validationSchema = yup.object().shape({
 	name: yup.string().label('Nome').required().max(255),
 });
 
 export const Form = () => {
-	const snackbar = useSnackbar();
+	const { enqueueSnackbar } = useSnackbar();
 	const history = useHistory();
 	const { id } = useParams<{ id }>();
 	const [category, setCategory] = useState<Category | null>(null);
-	const [loading, setLoading] = useState<boolean>(false);
+	const loading = useContext(LoadingContext);
 
 	const { register, handleSubmit, getValues, errors, reset, setValue, watch, triggerValidation } = useForm<{ name; is_active }>({
 		validationSchema,
@@ -35,7 +35,6 @@ export const Form = () => {
 
 		let isSubscribed = true;
 		(async function getCategory() {
-			setLoading(true);
 			try {
 				const { data } = await categoryHttp.get(id);
 				if (isSubscribed) {
@@ -44,36 +43,30 @@ export const Form = () => {
 				}
 			} catch (error) {
 				console.error(error);
-				snackbar.enqueueSnackbar('Não foi possível carregar as informações', { variant: 'error' });
-			} finally {
-				setLoading(false);
+				enqueueSnackbar('Não foi possível carregar as informações', { variant: 'error' });
 			}
 		})();
 
 		return () => {
 			isSubscribed = false;
 		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
+	}, [enqueueSnackbar, id, reset]);
 
 	useEffect(() => {
 		register({ name: 'is_active' });
 	}, [register]);
 
 	async function onSubmit(formData, event) {
-		setLoading(true);
 		try {
 			const http = !category ? categoryHttp.create(formData) : categoryHttp.update(category.id, formData);
 			const { data } = await http;
-			snackbar.enqueueSnackbar('Categoria salva com sucesso', { variant: 'success' });
+			enqueueSnackbar('Categoria salva com sucesso', { variant: 'success' });
 			setTimeout(() => {
 				event ? (id ? history.replace(`/categories/${data.data.id}/edit`) : history.push(`/categories/${data.data.id}/edit`)) : history.push('/categories');
 			});
 		} catch (error) {
 			console.error(error);
-			snackbar.enqueueSnackbar('Não foi possivel salvar a categoria', { variant: 'error' });
-		} finally {
-			setLoading(false);
+			enqueueSnackbar('Não foi possivel salvar a categoria', { variant: 'error' });
 		}
 	}
 
